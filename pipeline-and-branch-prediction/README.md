@@ -2,7 +2,7 @@
 
 A trace-driven processor simulation lab covering pipeline timing, dependencies, forwarding, and branch prediction. This project corresponds to the original second lab.
 
-**Status: unfinished starter implementation.** The source builds, but dependency detection, stalls, forwarding behavior, and branch prediction still need implementation. The files in `ref/` are supplied expected outputs, not results achieved by the current code.
+**Status: Part A complete; Part B unfinished.** Dependency detection, ordered stalls, and forwarding are implemented. All six A1–A3 reference cases for `sml` and `gcc` match instruction counts, cycles, and CPI. Branch prediction still needs implementation. The files in `ref/` are supplied expected outputs.
 
 ## Architecture and intended experiments
 
@@ -16,11 +16,11 @@ The simulator models Fetch (IF), Decode (ID), Execute (EX), Memory Access (MA), 
 | B1 | 2 | EX and MA | Always taken |
 | B2 | 2 | EX and MA | Gshare |
 
-These are intended configurations exposed by the framework; enabling a flag does not complete its missing implementation.
+A1–A3 are implemented. B1–B2 require the unfinished branch predictor.
 
 ## Implementation map
 
-- [`src/pipeline.cpp`](src/pipeline.cpp): stage movement and instruction retirement are present. Decode currently copies instructions without dependency stalls; forwarding branches and `pipe_check_bpred()` contain TODOs.
+- [`src/pipeline.cpp`](src/pipeline.cpp): Decode tracks the most recent older writer for each source register and condition codes, handles forwarding, and preserves instruction order during stalls. `pipe_check_bpred()` remains a Part B TODO.
 - [`src/pipeline.h`](src/pipeline.h): pipeline state and latch definitions.
 - [`src/bpred.cpp`](src/bpred.cpp): predictor constructor and update method are unimplemented; `predict()` returns a placeholder taken prediction. Predictor state and counters are not initialized by the current constructor.
 - [`src/bpred.h`](src/bpred.h): perfect, always-taken, and Gshare policy definitions, plus saturating-counter helpers.
@@ -36,9 +36,9 @@ make -C src
 ./src/sim -pipewidth 1 traces/sml.ptr.gz
 ```
 
-The command above is a basic execution check; its timing is not evidence that hazard handling is correct.
+The small A1 trace produces 122 cycles and CPI 1.220, matching the reference.
 
-After implementing the missing logic, an example two-wide configuration with forwarding and Gshare is:
+After implementing Part B, an example two-wide configuration with forwarding and Gshare is:
 
 ```bash
 ./src/sim -pipewidth 2 -enablememfwd -enableexefwd -bpredpolicy 2 traces/gcc.ptr.gz
@@ -76,3 +76,15 @@ This writes A1–B2 results for bzip2, gcc, libq, and mcf, and summarizes CPI an
 - `results/`: generated outputs, created before running the scripts.
 
 No completed benchmark report is included for this project. A successful build alone does not validate the intended pipeline or branch-prediction behavior.
+
+## Part A validation
+
+All six supplied Part A cases match exactly:
+
+| Case | Small cycles | GCC cycles | GCC CPI |
+| --- | ---: | ---: | ---: |
+| A1 | 122 | 11,412,411 | 1.141 |
+| A2 | 77 | 6,720,461 | 0.672 |
+| A3 | 57 | 5,206,917 | 0.521 |
+
+The build completes with `-Wall` without warnings.

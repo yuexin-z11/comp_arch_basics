@@ -281,14 +281,76 @@ void pipe_cycle_ID(Pipeline *p)
         // Copy each instruction from the IF latch to the ID latch.
         p->pipe_latch[ID_LATCH][i] = p->pipe_latch[IF_LATCH][i];
 
-        if (ENABLE_MEM_FWD)
+        // clear last cycle's stall before checking again.
+        p->pipe_latch[IF_LATCH][i].stall = false;
+
+        const auto &incoming = p->pipe_latch[IF_LATCH][i];
+        if (!incoming.valid)
         {
-            // TODO: Handle forwarding from the MA stage.
+            continue;
         }
 
-        if (ENABLE_EXE_FWD)
+        // Track the most recent older writer separately for source 1,
+        // source 2, and the condition codes.
+        uint64_t writer_id[3] = {0, 0, 0};
+        bool writer_must_stall[3] = {false, false, false};
+        const unsigned int stages[] = {IF_LATCH, EX_LATCH, MA_LATCH};
+
+        for (unsigned int stage : stages)
         {
-            // TODO: Handle forwarding from the EX stage.
+            for (unsigned int j = 0; j < PIPE_WIDTH; j++)
+            {
+                const auto &older = p->pipe_latch[stage][j];
+                if (!older.valid || older.op_id >= incoming.op_id)
+                {
+                    continue;
+                }
+
+                const bool writes_operand[3] = {
+                    incoming.trace_rec.src1_needed && older.trace_rec.dest_needed &&
+                        incoming.trace_rec.src1_reg == older.trace_rec.dest_reg,
+                    incoming.trace_rec.src2_needed && older.trace_rec.dest_needed &&
+                        incoming.trace_rec.src2_reg == older.trace_rec.dest_reg,
+                    incoming.trace_rec.cc_read && older.trace_rec.cc_write
+                };
+
+                // IF has no result yet. EX can forward non-load results;
+                // MA can forward results, including loads.
+                const bool must_stall =
+                    stage == IF_LATCH ||
+                    (stage == EX_LATCH &&
+                     (!ENABLE_EXE_FWD || older.trace_rec.op_type == OP_LD)) ||
+                    (stage == MA_LATCH && !ENABLE_MEM_FWD);
+
+                for (unsigned int operand = 0; operand < 3; operand++)
+                {
+                    if (writes_operand[operand] && older.op_id > writer_id[operand])
+                    {
+                        writer_id[operand] = older.op_id;
+                        writer_must_stall[operand] = must_stall;
+                    }
+                }
+            }
+        }
+
+        if (writer_must_stall[0] || writer_must_stall[1] || writer_must_stall[2])
+        {
+            p->pipe_latch[IF_LATCH][i].stall = true;
+            p->pipe_latch[ID_LATCH][i].valid = false;
+        }
+    }
+
+    // if older instruction in IF stage is stalled, stall the younger instruction as well
+    for (unsigned int i = 0; i < PIPE_WIDTH; i++)
+    {
+        for (unsigned int j = 0; j < PIPE_WIDTH; j++)
+        {
+            if (i != j && p->pipe_latch[IF_LATCH][i].valid && p->pipe_latch[IF_LATCH][j].valid
+                && p->pipe_latch[IF_LATCH][i].op_id > p->pipe_latch[IF_LATCH][j].op_id && p->pipe_latch[IF_LATCH][j].stall)
+            {
+                p->pipe_latch[IF_LATCH][i].stall = true; // stall the younger instruction as well
+                p->pipe_latch[ID_LATCH][i].valid = false; // insert bubble in ID stage
+            }
         }
     }
 }
@@ -305,6 +367,12 @@ void pipe_cycle_IF(Pipeline *p)
 {
     for (unsigned int i = 0; i < PIPE_WIDTH; i++)
     {
+        // Preserve the waiting instruction instead of fetching a replacement.
+        if (p->pipe_latch[IF_LATCH][i].stall)
+        {
+            continue;
+        }
+
         // Read an instruction from the trace file.
         PipelineLatch fetch_op;
         pipe_get_fetch_op(p, &fetch_op);
