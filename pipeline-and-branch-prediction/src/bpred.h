@@ -50,6 +50,18 @@ private:
     /** The policy this branch predictor uses. */
     BPredPolicy policy;
 
+    /** The number of bits used by the Gshare global history register. */
+    static const uint32_t GSHARE_HISTORY_LENGTH = 12;
+    /** The number of two-bit counters in the Gshare pattern history table. */
+    static const uint32_t GSHARE_TABLE_SIZE = 1U << GSHARE_HISTORY_LENGTH;
+    /** A mask for retaining the bottom 12 bits of an address or history. */
+    static const uint32_t GSHARE_MASK = GSHARE_TABLE_SIZE - 1;
+
+    /** The outcomes of the 12 most recently observed conditional branches. */
+    uint32_t global_history;
+    /** The Gshare pattern history table of two-bit saturating counters. */
+    uint8_t pattern_history_table[GSHARE_TABLE_SIZE];
+
 public:
     /** The total number of branches this branch predictor has seen. */
     uint64_t stat_num_branches;

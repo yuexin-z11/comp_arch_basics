@@ -17,11 +17,17 @@
  * @param policy the policy this branch predictor should use
  */
 BPred::BPred(BPredPolicy policy)
+    : policy(policy),
+      global_history(0),
+      stat_num_branches(0),
+      stat_num_mispred(0)
 {
-    // TODO: Initialize member variables here.
-
-    // As a reminder, you can declare any additional member variables you need
-    // in the BPred class in bpred.h and initialize them here.
+    // Start every two-bit counter in the weakly-taken state
+    // (binary 10, or decimal 2).
+    for (uint32_t i = 0; i < GSHARE_TABLE_SIZE; i++)
+    {
+        pattern_history_table[i] = 2;
+    }
 }
 
 /**
