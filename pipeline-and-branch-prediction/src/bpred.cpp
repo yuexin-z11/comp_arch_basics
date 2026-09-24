@@ -42,11 +42,27 @@ BranchDirection BPred::predict(uint64_t pc)
 {
     // TODO: Return a prediction for whether the branch at address pc will be
     // TAKEN or NOT_TAKEN according to this branch predictor's policy.
-
-    // Note that you do not have to handle the BPRED_PERFECT policy here; this
-    // function will not be called for that policy.
-
-    return TAKEN; // This is just a placeholder.
+    if (policy == BPRED_ALWAYS_TAKEN)
+    {
+        return TAKEN;
+    }
+    else if (policy == BPRED_GSHARE)
+    {
+        if (pattern_history_table[(pc ^ global_history) & GSHARE_MASK] >= 2)
+        {
+            return TAKEN;
+        }
+        else
+        {
+            return NOT_TAKEN;
+        }
+    }
+    else
+    {
+        // Note that you do not have to handle the BPRED_PERFECT policy here; this
+        // function will not be called for that policy.
+        return TAKEN;
+    }
 }
 
 
@@ -66,8 +82,37 @@ void BPred::update(uint64_t pc, BranchDirection prediction,
 {
     // TODO: Update the stat_num_branches and stat_num_mispred member variables
     // according to the prediction and resolution of the branch.
+    if (prediction != resolution)
+    {
+        stat_num_mispred++;
+    }
+    stat_num_branches++;
 
     // TODO: Update any other internal state you may need to keep track of.
+    if (policy == BPRED_GSHARE)
+    {
+        uint32_t index = (pc ^ global_history) & GSHARE_MASK;
+        if (resolution == TAKEN)
+        {
+            if (pattern_history_table[index] < 3)
+            {
+                pattern_history_table[index]++;
+            }
+        }
+        else
+        {
+            if (pattern_history_table[index] > 0)
+            {
+                pattern_history_table[index]--;
+            }
+        }
+    }
+
+    // update global history register
+    if (policy == BPRED_GSHARE)
+    {
+        global_history = ((global_history << 1) | (resolution == TAKEN ? 1 : 0)) & GSHARE_MASK;
+    }
 
     // Note that you do not have to handle the BPRED_PERFECT policy here; this
     // function will not be called for that policy.

@@ -228,6 +228,13 @@ void pipe_cycle_WB(Pipeline *p)
                 // Halt the pipeline if we've reached the end of the trace.
                 p->halt = true;
             }
+
+            // Release the fetch stall when the mispredicted conditional branch
+            // reaches the WB stage and retires.
+            if (p->pipe_latch[MA_LATCH][i].trace_rec.op_type == OP_CBR && p->pipe_latch[MA_LATCH][i].is_mispred_cbr)
+            {
+                p->fetch_cbr_stall = false;
+            }
         }
     }
 }
@@ -373,6 +380,13 @@ void pipe_cycle_IF(Pipeline *p)
             continue;
         }
 
+        // check the pipeline-level branch-stall flag
+        if (p->fetch_cbr_stall)
+        {
+            p->pipe_latch[IF_LATCH][i].valid = false; // insert bubble in IF stage
+            continue;
+        }
+
         // Read an instruction from the trace file.
         PipelineLatch fetch_op;
         pipe_get_fetch_op(p, &fetch_op);
@@ -402,12 +416,26 @@ void pipe_check_bpred(Pipeline *p, PipelineLatch *fetch_op)
 {
     // TODO: For a conditional branch instruction, get a prediction from the
     // branch predictor.
+    if (fetch_op->valid && fetch_op->trace_rec.op_type == OP_CBR)
+    {
+        BranchDirection prediction = p->b_pred->predict(fetch_op->trace_rec.inst_addr);
+        BranchDirection resolution = fetch_op->trace_rec.br_dir ? TAKEN : NOT_TAKEN;
 
-    // TODO: If the branch predictor mispredicted, mark the fetch_op
-    // accordingly.
+        // TODO: If the branch predictor mispredicted, mark the fetch_op
+        // accordingly.
+        if (prediction != resolution)
+        {
+            fetch_op->is_mispred_cbr = true;
+            // TODO: If needed, stall the IF stage by setting the flag
+            // p->fetch_cbr_stall.
+            p->fetch_cbr_stall = true; // stall the IF stage due to misprediction
 
-    // TODO: Immediately update the branch predictor.
+        }
 
-    // TODO: If needed, stall the IF stage by setting the flag
-    // p->fetch_cbr_stall.
+        // TODO: Immediately update the branch predictor.
+        p->b_pred->update(fetch_op->trace_rec.inst_addr, prediction, resolution);
+    }
+
+
+
 }
