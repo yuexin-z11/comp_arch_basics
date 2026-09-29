@@ -5,7 +5,7 @@ Computer architecture labs for ECE 6100, organized by the concepts they explore.
 | Project | Topics | Current status |
 | --- | --- | --- |
 | [Instruction Trace Analysis](instruction-trace-analysis/) | Dynamic instruction mix, cycles per instruction (CPI), unique instruction addresses | Analysis implemented; saved benchmark results included |
-| [Pipeline and Branch Prediction](pipeline-and-branch-prediction/) | Five-stage pipelines, data hazards, forwarding, superscalar width, branch prediction | Part A implemented and all six reference cases pass; Part B branch prediction unfinished |
+| [Pipeline and Branch Prediction](pipeline-and-branch-prediction/) | Five-stage pipelines, data hazards, forwarding, superscalar width, branch prediction | Pipeline and branch prediction implemented; all ten supplied reference cases pass |
 
 Each project includes its C++ source, compressed input traces, scripts, and a README with build and run instructions. The pipeline project also includes supplied reference outputs. Original course labels in scripts and result files are retained so the supplied tooling continues to work.
 
@@ -20,4 +20,4 @@ make -C instruction-trace-analysis/src
 ./instruction-trace-analysis/src/sim instruction-trace-analysis/traces/libq.otr.gz
 ```
 
-Compiled simulators and object files are excluded from version control. The original course framework, traces, and reference material are preserved alongside the lab work; Part A has been checked against the supplied reference results.
+Compiled simulators and object files are excluded from version control. The original course framework, traces, and reference material are preserved alongside the implementation. The instruction trace analysis matches all four saved benchmark results, and the pipeline simulator matches all ten supplied reference cases.
