@@ -423,22 +423,75 @@ void pipe_cycle_exe(Pipeline *p)
  */
 void pipe_cycle_issue(Pipeline *p)
 {
-    // TODO: For each valid instruction from the ID stage:
+    // issue at most PIPE_WIDTH decoded instructions this cycle
+    for (unsigned int issued = 0; issued < PIPE_WIDTH; ++issued)
+    {
+        // find the oldest valid decoded instruction
+        int oldest = -1;
+        for (unsigned int j = 0; j < PIPE_WIDTH; ++j)
+        {
+            if (p->ID_latch[j].valid &&
+                (oldest == -1 || p->ID_latch[j].inst.inst_num < p->ID_latch[oldest].inst.inst_num))
+            {
+                oldest = j;
+            }
+        }
+        if (oldest == -1)
+        {
+            break;
+        }
 
-    // TODO: If there is space in the ROB, insert the instruction.
-    // TODO: Set the entry invalid in the previous latch when you do so.
+        // stop the loop if ROB has no space
+        if (!rob_check_space(p->rob))
+        {
+            break;
+        }
 
-    // TODO: Then, check RAT for this instruction's source operands:
-    // TODO: If src1 is not remapped, mark src1 as ready.
-    // TODO: If src1 is remapped, set src1 tag accordingly, and set src1 ready
-    //       according to whether the ROB entry with that tag is ready.
-    // TODO: If src2 is not remapped, mark src2 as ready.
-    // TODO: If src2 is remapped, set src2 tag accordingly, and set src2 ready
-    //       according to whether the ROB entry with that tag is ready.
+        // work on a copy of the decoded instruction
+        InstInfo inst = p->ID_latch[oldest].inst;
+        inst.src1_tag = -1;
+        inst.src1_ready = true;
 
-    // TODO: Set the tag for this instruction's destination register.
-    // TODO: If this instruction writes to a register, update the RAT
-    //       accordingly.
+        // check whether the instruction uses a first source register
+        if (inst.src1_reg != -1)
+        {
+            // RAT mapping points to the ROB entry producing this operand
+            inst.src1_tag = rat_get_remap(p->rat, inst.src1_reg);
+            if (inst.src1_tag != -1)
+            {
+                inst.src1_ready = rob_check_ready(p->rob, inst.src1_tag);
+            }
+        }
+
+        // same thing but with the second source
+        inst.src2_tag = -1;
+        inst.src2_ready = true;
+
+        if (inst.src2_reg != -1)
+        {
+            // RAT mapping points to the ROB entry producing this operand
+            inst.src2_tag = rat_get_remap(p->rat, inst.src2_reg);
+            if (inst.src2_tag != -1)
+            {
+                inst.src2_ready = rob_check_ready(p->rob, inst.src2_tag);
+            }
+        }
+
+        // save returned ROB index in a local variable
+        int tag = rob_insert(p->rob, inst);
+
+        // store the ROB index as the instruction's destination tag
+        inst.dr_tag = tag;
+        p->rob->entries[tag].inst.dr_tag = tag;
+
+        // record where the instruction's future result will be
+        if (inst.dest_reg != -1)
+        {
+            rat_set_remap(p->rat, inst.dest_reg, tag);
+        }
+
+        p->ID_latch[oldest].valid = false;
+    }
 }
 
 /**
@@ -452,28 +505,64 @@ void pipe_cycle_issue(Pipeline *p)
  */
 void pipe_cycle_schedule(Pipeline *p)
 {
-    // TODO: Implement two scheduling policies:
-
     if (SCHED_POLICY == SCHED_IN_ORDER)
     {
         // In-order scheduling:
-        // TODO: Find the oldest valid entry in the ROB that is not already
-        //       executing.
-        // TODO: Check if it is stalled, i.e., if at least one source operand
-        //       is not ready.
-        // TODO: If so, stop scheduling instructions.
-        // TODO: Otherwise, mark it as executing in the ROB and send it to the
-        //       next latch.
-        // TODO: Repeat for each lane of the pipeline.
+        for (unsigned int lane = 0; lane < PIPE_WIDTH; ++lane)
+        {
+            // scan from the oldest ROB entry, wrapping around at the end
+            for (unsigned int offset = 0; offset < NUM_ROB_ENTRIES; ++offset)
+            {
+                // calculate which entry to inspect
+                unsigned int index = (p->rob->head_ptr + offset) % NUM_ROB_ENTRIES;
+                if (!p->rob->entries[index].valid || p->rob->entries[index].exec)
+                {
+                    continue;
+                }
+
+                // check whether instruction source is ready
+                if (!p->rob->entries[index].inst.src1_ready || !p->rob->entries[index].inst.src2_ready)
+                {
+                    return;
+                }
+
+                // move ready instruction into an SC_latch
+                rob_mark_exec(p->rob, p->rob->entries[index].inst);
+                p->SC_latch[lane].inst =  p->rob->entries[index].inst;
+                p->SC_latch[lane].valid = true;
+                break;
+            }
+        }
     }
 
     if (SCHED_POLICY == SCHED_OUT_OF_ORDER)
     {
         // Out-of-order scheduling:
-        // TODO: Find the oldest valid entry in the ROB that has both source
-        //       operands ready but is not already executing.
-        // TODO: Mark it as executing in the ROB and send it to the next latch.
-        // TODO: Repeat for each lane of the pipeline.
+        for (unsigned int lane = 0; lane < PIPE_WIDTH; ++lane)
+        {
+            // scan from the oldest ROB entry, wrapping around at the end
+            for (unsigned int offset = 0; offset < NUM_ROB_ENTRIES; ++offset)
+            {
+                // calculate which entry to inspect
+                unsigned int index = (p->rob->head_ptr + offset) % NUM_ROB_ENTRIES;
+                if (!p->rob->entries[index].valid || p->rob->entries[index].exec)
+                {
+                    continue;
+                }
+
+                // check whether instruction source is ready
+                if (!p->rob->entries[index].inst.src1_ready || !p->rob->entries[index].inst.src2_ready)
+                {
+                    continue;
+                }
+
+                // move ready instruction into an SC_latch
+                rob_mark_exec(p->rob, p->rob->entries[index].inst);
+                p->SC_latch[lane].inst =  p->rob->entries[index].inst;
+                p->SC_latch[lane].valid = true;
+                break;
+            }
+        }
     }
 }
 
@@ -488,13 +577,22 @@ void pipe_cycle_schedule(Pipeline *p)
  */
 void pipe_cycle_writeback(Pipeline *p)
 {
-    // TODO: For each valid instruction from the EX stage:
-    // TODO: Broadcast the result to all ROB entries.
-    // TODO: Update the ROB: mark the instruction ready to commit.
-    // TODO: Invalidate the instruction in the previous latch.
+    // multiple instructions can finish execution in the same cycle
+    for (unsigned int i = 0; i < MAX_WRITEBACKS; ++i)
+    {
+        // skip if not valid
+        if (!p->EX_latch[i].valid)
+        {
+            continue;
+        }
 
-    // Remember: how many instructions can the EX stage send to the WB stage
-    // in one cycle?
+        // this instruction's result is available
+        rob_wakeup(p->rob, p->EX_latch[i].inst.dr_tag);
+        // mark this instruction's own ROB entry ready
+        rob_mark_ready(p->rob, p->EX_latch[i].inst);
+        // consume the EX latch so the instruction writes back only once
+        p->EX_latch[i].valid = false;
+    }
 }
 
 /**
@@ -508,22 +606,23 @@ void pipe_cycle_writeback(Pipeline *p)
  */
 void pipe_cycle_commit(Pipeline *p)
 {
-    // TODO: Check if the instruction at the head of the ROB is ready to
-    //       commit.
-    // TODO: If so, remove it from the ROB.
-    // TODO: Commit that instruction.
-    // TODO: If a RAT mapping exists and is still relevant, update the RAT.
-    // TODO: Repeat for each lane of the pipeline.
-
-    // The following code is DUMMY CODE to ensure that the base code compiles
-    // and that the simulation terminates. Replace it with a correct
-    // implementation!
+    // commit up to PIPE_WIDTH oldest instructions, stopping at an unready head
     for (unsigned int i = 0; i < PIPE_WIDTH; i++)
     {
-        if (p->FE_latch[i].valid)
+        if (!rob_check_head(p->rob))
         {
-            pipe_commit_inst(p, p->FE_latch[i].inst);
-            p->FE_latch[i].valid = false;
+            break;
+        }
+
+        // save its instruction for the next commit step
+        InstInfo inst = rob_remove_head(p->rob);
+        // update the retired-instruction count
+        pipe_commit_inst(p, inst);
+
+        // clear the RAT mapping only when conditions hold
+        if (inst.dest_reg != -1 && rat_get_remap(p->rat, inst.dest_reg) == inst.dr_tag)
+        {
+            rat_reset_entry(p->rat, inst.dest_reg);
         }
     }
 }

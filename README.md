@@ -6,7 +6,7 @@ Computer architecture projects for ECE 6100, organized by the concepts they expl
 | --- | --- | --- |
 | [Instruction Trace Analysis](instruction-trace-analysis/) | Dynamic instruction mix, cycles per instruction (CPI), unique instruction addresses | Analysis implemented; saved benchmark results included |
 | [Pipeline and Branch Prediction](pipeline-and-branch-prediction/) | Five-stage pipelines, data hazards, forwarding, superscalar width, branch prediction | Pipeline and branch prediction implemented; all ten supplied reference cases pass |
-| [Out-of-Order Pipeline Simulator](out-of-order-pipeline/) | Register renaming, reorder buffer, scheduling, in-order commit | RAT and ROB functions compile; pipeline stages in progress |
+| [Out-of-Order Pipeline Simulator](out-of-order-pipeline/) | Register renaming, reorder buffer, in-order and out-of-order scheduling, in-order commit | One- and two-wide pipelines implemented; all 16 supplied reference cases pass |
 
 Each project includes its C++ source, compressed input traces, scripts, and a README with build and run instructions. The pipeline projects also include supplied reference outputs. Original course labels in scripts and result files are retained so the supplied tooling continues to work.
 
@@ -21,4 +21,4 @@ make -C instruction-trace-analysis/src
 ./instruction-trace-analysis/src/sim instruction-trace-analysis/traces/libq.otr.gz
 ```
 
-Compiled simulators and object files are excluded from version control. The original course framework, traces, and reference material are preserved alongside the implementation. The instruction trace analysis matches all four saved benchmark results, and the branch-prediction simulator matches all ten supplied reference cases. The out-of-order simulator remains in progress.
+Compiled simulators and object files are excluded from version control. The original course framework, traces, and reference material are preserved alongside the implementation. The instruction trace analysis matches all four saved benchmark results, the branch-prediction simulator matches all ten supplied reference cases, and the out-of-order simulator matches all 16 supplied reference cases.
