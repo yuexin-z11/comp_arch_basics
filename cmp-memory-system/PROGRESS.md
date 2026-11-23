@@ -9,7 +9,7 @@ Workflow: one PR per part, branched from `main`. Merge with **"Create a merge co
 | Part | Pts | Branch | Files | Ref tests | Status |
 | --- | --- | --- | --- | --- | --- |
 | Skeleton | – | `lab4/skeleton` | structs, tooling, docs | – | In review |
-| A: cache | 3 | `lab4/part-a` | `cache.cpp` | `A.libq` | Todo |
+| A: cache | 3 | `lab4/part-a` | `cache.cpp` | `A.libq` | In progress |
 | B: multi-level | 2 | `lab4/part-b` | `memsys.cpp`, `dram.cpp` (fixed 100) | `B.S1MB.libq` | Todo |
 | C: DRAM row buffer | 3 | `lab4/part-c` | `dram.cpp` | `C.S1MB.{OP,CP}.libq` | Todo |
 | D: two cores | 2 | `lab4/part-d` | `memsys.cpp` | `D.mix1` | Todo |
