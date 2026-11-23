@@ -7,7 +7,6 @@ Computer architecture projects for ECE 6100, organized by the concepts they expl
 | [Instruction Trace Analysis](instruction-trace-analysis/) | Dynamic instruction mix, cycles per instruction (CPI), unique instruction addresses | Analysis implemented; saved benchmark results included |
 | [Pipeline and Branch Prediction](pipeline-and-branch-prediction/) | Five-stage pipelines, data hazards, forwarding, superscalar width, branch prediction | Pipeline and branch prediction implemented; all ten supplied reference cases pass |
 | [Out-of-Order Pipeline Simulator](out-of-order-pipeline/) | Register renaming, reorder buffer, in-order and out-of-order scheduling, in-order commit | One- and two-wide pipelines implemented; all 16 supplied reference cases pass |
-| [CMP Memory System Simulator](cmp-memory-system/) | Set-associative caches, LRU/random replacement, multi-level hierarchy, DRAM row buffers and page policies, shared-cache way partitioning | In progress; see [PROGRESS.md](cmp-memory-system/PROGRESS.md) |
 
 Each project includes its C++ source, compressed input traces, scripts, and a README with build and run instructions. The pipeline projects also include supplied reference outputs. Original course labels in scripts and result files are retained so the supplied tooling continues to work.
 
