@@ -57,6 +57,7 @@ extern unsigned int SWP_CORE0_WAYS;
 Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
                  ReplacementPolicy replacement_policy)
 {
+    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets.
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
 }
@@ -78,6 +79,7 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
 CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
                          unsigned int core_id)
 {
+    // TODO(lab4-A): tag/index split, LRU timestamp update, read/write stats.
     // TODO: Return HIT if the access hits in the cache, and MISS otherwise.
     // TODO: If is_write is true, mark the resident line as dirty.
     // TODO: Update the appropriate cache statistics.
@@ -99,6 +101,7 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
 void cache_install(Cache *c, uint64_t line_addr, bool is_write,
                    unsigned int core_id)
 {
+    // TODO(lab4-A): save victim to last_evicted_line, count dirty evicts.
     // TODO: Use cache_find_victim() to determine the victim line to evict.
     // TODO: Copy it into a last_evicted_line field in the cache in order to
     //       track writebacks.
@@ -125,6 +128,9 @@ void cache_install(Cache *c, uint64_t line_addr, bool is_write,
 unsigned int cache_find_victim(Cache *c, unsigned int set_index,
                                unsigned int core_id)
 {
+    // TODO(lab4-A): invalid way first, then LRU / RANDOM.
+    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS).
+    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets.
     // TODO: Find a victim way in the given cache set according to the cache's
     //       replacement policy.
     // TODO: In part A, implement the LRU and random replacement policies.

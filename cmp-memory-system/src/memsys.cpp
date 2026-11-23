@@ -268,6 +268,8 @@ uint64_t memsys_access_modeBC(MemorySystem *sys, uint64_t line_addr,
 
     if (type == ACCESS_TYPE_IFETCH)
     {
+        // TODO(lab4-B): L1 access -> on miss L2 access + install; L1 dirty
+        //               victim -> L2 writeback (off critical path).
         // TODO: Simulate the instruction fetch and update delay accordingly.
     }
 
@@ -305,6 +307,8 @@ uint64_t memsys_l2_access(MemorySystem *sys, uint64_t line_addr,
 {
     uint64_t delay = L2CACHE_HIT_LATENCY;
 
+    // TODO(lab4-B): L2 hit/miss, DRAM read on miss, DRAM writeback of
+    //               dirty L2 victim (delay not counted).
     // TODO: Perform the L2 cache access.
 
     // TODO: Use the dram_access() function to get the delay of an L2 miss.
@@ -342,6 +346,7 @@ uint64_t memsys_access_modeDEF(MemorySystem *sys, uint64_t v_line_addr,
     uint64_t delay = 0;
     uint64_t p_line_addr = 0;
 
+    // TODO(lab4-D): VPN->PFN translation, per-core L1s, shared L2.
     // TODO: First convert lineaddr from virtual (v) to physical (p) using the
     //       function memsys_convert_vpn_to_pfn(). Page size is defined to be
     //       4 KB, as indicated by the PAGE_SIZE constant.

@@ -32,11 +32,60 @@
 // TODO: Define any other data structures you need here.
 // Refer to Appendix A for details on data structures you will need here.
 
+/** Possible replacement policies for the cache. */
+typedef enum ReplacementPolicyEnum
+{
+    LRU = 0,    // Evict the least recently used line.
+    RANDOM = 1, // Evict a random line.
+
+    /**
+     * Evict according to a static way partitioning policy.
+     * Part E asks you to implement this policy for extra credit.
+     */
+    SWP = 2,
+
+    /**
+     * Evict according to a dynamic way partitioning policy.
+     * Part F asks you to implement this policy for extra credit.
+     */
+    DWP = 3,
+} ReplacementPolicy;
+
+/** A single cache line (way). No data is stored; only metadata. */
+typedef struct CacheLine
+{
+    bool valid;              // The line holds a resident block.
+    bool dirty;              // The line was written since install (writeback on evict).
+    uint64_t tag;            // Line address bits above the set index.
+    unsigned int core_id;    // Owning core (parts D, E, F).
+    uint64_t last_access_time; // current_cycle of last touch (LRU timestamp).
+} CacheLine;
+
+/** A single cache set: up to MAX_WAYS_PER_CACHE_SET ways. */
+typedef struct CacheSet
+{
+    CacheLine lines[MAX_WAYS_PER_CACHE_SET];
+} CacheSet;
+
 /** A single cache module. */
 typedef struct Cache
 {
     // TODO: Define any other fields you need here.
     // Refer to Appendix A for details on other fields you will need here.
+
+    CacheSet *sets;                       // Array of num_sets sets.
+    uint64_t num_sets;                    // size / (line_size * num_ways).
+    uint64_t num_ways;                    // Associativity (<= 16).
+    ReplacementPolicy replacement_policy; // LRU / RANDOM / SWP / DWP.
+
+    /**
+     * Copy of the most recently evicted line, so the caller can schedule a
+     * writeback to the next level when it is valid and dirty (part B).
+     */
+    CacheLine last_evicted_line;
+
+    // TODO(lab4-F): Add dynamic partitioning state here (e.g., UCP utility
+    //               monitors / per-core target way allocation).
 
     /**
      * The total number of times this cache was accessed for a read.
@@ -75,25 +124,6 @@ typedef enum CacheResultEnum
     HIT = 1,  // The access hit the cache.
     MISS = 0, // The access missed the cache.
 } CacheResult;
-
-/** Possible replacement policies for the cache. */
-typedef enum ReplacementPolicyEnum
-{
-    LRU = 0,    // Evict the least recently used line.
-    RANDOM = 1, // Evict a random line.
-
-    /**
-     * Evict according to a static way partitioning policy.
-     * Part E asks you to implement this policy for extra credit.
-     */
-    SWP = 2,
-
-    /**
-     * Evict according to a dynamic way partitioning policy.
-     * Part F asks you to implement this policy for extra credit.
-     */
-    DWP = 3,
-} ReplacementPolicy;
 
 ///////////////////////////////////////////////////////////////////////////////
 //                            FUNCTION PROTOTYPES                            //
