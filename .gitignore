@@ -1,3 +1,5 @@
 **/src/sim
 *.o
 .DS_Store
+cmp-memory-system/submission/
+cmp-memory-system/scripts/report.txt
