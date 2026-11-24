@@ -77,7 +77,9 @@ extern DRAMPolicy DRAM_PAGE_POLICY;
  */
 DRAM *dram_new()
 {
-    return (DRAM *)calloc(1, sizeof(DRAM));
+    // zeroed, so stats start at 0 and every row buffer starts invalid
+    DRAM *dram = (DRAM *)calloc(1, sizeof(DRAM));
+    return dram;
 }
 
 /**
@@ -99,9 +101,13 @@ DRAM *dram_new()
  */
 uint64_t dram_access(DRAM *dram, uint64_t line_addr, bool is_dram_write)
 {
-    uint64_t delay = SIM_MODE == SIM_MODE_B
-                         ? DELAY_SIM_MODE_B
-                         : dram_access_mode_CDEF(dram, line_addr, is_dram_write);
+    uint64_t delay;
+
+    // part B: fixed latency, part C+: row buffer timing
+    if (SIM_MODE == SIM_MODE_B)
+        delay = DELAY_SIM_MODE_B;
+    else
+        delay = dram_access_mode_CDEF(dram, line_addr, is_dram_write);
 
     if (is_dram_write)
     {
@@ -115,6 +121,9 @@ uint64_t dram_access(DRAM *dram, uint64_t line_addr, bool is_dram_write)
     }
 
     return delay;
+    // TODO: Update the appropriate DRAM statistics.
+    // TODO: Call the dram_access_mode_CDEF() function as needed.
+    // TODO: Return the delay in cycles incurred by this DRAM access.
 }
 
 /**
@@ -137,11 +146,39 @@ uint64_t dram_access(DRAM *dram, uint64_t line_addr, bool is_dram_write)
 uint64_t dram_access_mode_CDEF(DRAM *dram, uint64_t line_addr,
                                bool is_dram_write)
 {
-    // Assume a mapping with consecutive lines in the same row and consecutive
-    // row buffers in consecutive rows.
-    // TODO(lab4-C): bank/row mapping, open vs close page, ACT/CAS/PRE/BUS.
-    // TODO: Use this function to track open rows.
-    // TODO: Compute the delay based on row buffer hit/miss/empty.
+    // lines per row (1024 B row / 64 B line = 16)
+    uint64_t lines_per_row = ROW_BUFFER_SIZE / CACHE_LINESIZE;
+
+    // consecutive lines share a row, consecutive rows rotate across banks
+    uint64_t bank = (line_addr / lines_per_row) % NUM_BANKS;
+    uint64_t row_id = line_addr / (lines_per_row * NUM_BANKS);
+    RowbufEntry *rowbuf = &dram->perbank_row_buf[bank];
+
+    // close page: every row was closed after its last access
+    if (DRAM_PAGE_POLICY == CLOSE_PAGE)
+        return DELAY_ACT + DELAY_CAS + DELAY_BUS;
+
+    uint64_t delay;
+    if (!rowbuf->valid)
+    {
+        // row empty: activate, then read
+        delay = DELAY_ACT + DELAY_CAS + DELAY_BUS;
+    }
+    else if (rowbuf->row_id == row_id)
+    {
+        // row hit: the row is already open
+        delay = DELAY_CAS + DELAY_BUS;
+    }
+    else
+    {
+        // row miss: precharge the old row, activate the new one, then read
+        delay = DELAY_PRE + DELAY_ACT + DELAY_CAS + DELAY_BUS;
+    }
+
+    // open page: leave this row open for the next access
+    rowbuf->valid = true;
+    rowbuf->row_id = row_id;
+    return delay;
 }
 
 /**
