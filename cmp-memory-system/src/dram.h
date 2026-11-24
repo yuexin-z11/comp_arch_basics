@@ -20,14 +20,16 @@
 // TODO: Define any other data structures you need here.
 // Refer to Appendix B for details on data structures you will need here.
 
-/** The number of DRAM banks (one row buffer per bank). */
+// number of DRAM banks (one row buffer each)
 #define DRAM_NUM_BANKS 16
 
-/** One per-bank row buffer entry. */
+// row buffer state for one bank
 typedef struct RowbufEntry
 {
-    bool valid;      // A row is currently open in this bank.
-    uint64_t row_id; // Which row is open (meaningful only if valid).
+    // a row is currently open in this bank
+    bool valid;
+    // which row is open (only meaningful if valid)
+    uint64_t row_id;
 } RowbufEntry;
 
 /** A DRAM module. */
@@ -36,7 +38,8 @@ typedef struct DRAM
     // TODO: Define any other fields you need here.
     // Refer to Appendix B for details on other fields you will need here.
 
-    RowbufEntry perbank_row_buf[DRAM_NUM_BANKS]; // Open-row state per bank.
+    // open-row state per bank
+    RowbufEntry perbank_row_buf[DRAM_NUM_BANKS];
 
     /**
      * The total number of times DRAM was accessed for a read.
