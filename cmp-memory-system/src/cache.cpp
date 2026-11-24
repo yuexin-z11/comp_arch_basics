@@ -57,9 +57,22 @@ extern unsigned int SWP_CORE0_WAYS;
 Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
                  ReplacementPolicy replacement_policy)
 {
-    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets.
+    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
+     // one zeroed Cache struct, so all stats start at 0
+    Cache *c = (Cache *)calloc(1, sizeof(Cache));
+
+    c->num_ways = associativity;
+    c->replacement_policy = replacement_policy;
+
+    // sets = total bytes / (bytes per line * lines per set)
+    c->num_sets = size / (line_size * associativity);
+
+    // zeroed sets, so every line starts invalid
+    c->sets = (CacheSet *)calloc(c->num_sets, sizeof(CacheSet));
+
+    return c;
 }
 
 /**
