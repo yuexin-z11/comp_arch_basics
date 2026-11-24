@@ -57,9 +57,22 @@ extern unsigned int SWP_CORE0_WAYS;
 Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
                  ReplacementPolicy replacement_policy)
 {
-    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets.
+    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
+     // one zeroed Cache struct, so all stats start at 0
+    Cache *c = (Cache *)calloc(1, sizeof(Cache));
+
+    c->num_ways = associativity;
+    c->replacement_policy = replacement_policy;
+
+    // sets = total bytes / (bytes per line * lines per set)
+    c->num_sets = size / (line_size * associativity);
+
+    // zeroed sets, so every line starts invalid
+    c->sets = (CacheSet *)calloc(c->num_sets, sizeof(CacheSet));
+
+    return c;
 }
 
 /**
@@ -79,10 +92,37 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
 CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
                          unsigned int core_id)
 {
-    // TODO(lab4-A): tag/index split, LRU timestamp update, read/write stats.
-    // TODO: Return HIT if the access hits in the cache, and MISS otherwise.
-    // TODO: If is_write is true, mark the resident line as dirty.
-    // TODO: Update the appropriate cache statistics.
+    // low bits of line_addr pick the set, the rest is the tag
+    uint64_t set_index = line_addr % c->num_sets;
+    uint64_t tag = line_addr / c->num_sets;
+    CacheSet *set = &c->sets[set_index];
+
+    if (is_write)
+        c->stat_write_access++;
+    else
+        c->stat_read_access++;
+
+    for (unsigned int way = 0; way < c->num_ways; way++)
+    {
+        CacheLine *line = &set->lines[way];
+
+        // hit: valid line with a matching tag
+        if (line->valid && line->tag == tag)
+        {
+            // touch for LRU (timestamp = now)
+            line->last_access_time = current_cycle;
+            if (is_write)
+                line->dirty = true;
+            return HIT;
+        }
+    }
+
+    // miss: count it against the right stat
+    if (is_write)
+        c->stat_write_miss++;
+    else
+        c->stat_read_miss++;
+    return MISS;
 }
 
 /**
@@ -101,12 +141,25 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
 void cache_install(Cache *c, uint64_t line_addr, bool is_write,
                    unsigned int core_id)
 {
-    // TODO(lab4-A): save victim to last_evicted_line, count dirty evicts.
-    // TODO: Use cache_find_victim() to determine the victim line to evict.
-    // TODO: Copy it into a last_evicted_line field in the cache in order to
-    //       track writebacks.
-    // TODO: Initialize the victim entry with the line to install.
-    // TODO: Update the appropriate cache statistics.
+    uint64_t set_index = line_addr % c->num_sets;
+    uint64_t tag = line_addr / c->num_sets;
+
+    unsigned int way = cache_find_victim(c, set_index, core_id);
+    CacheLine *victim = &c->sets[set_index].lines[way];
+
+    // keep a copy of the old line so the caller can write it back
+    c->last_evicted_line = *victim;
+
+    // only a valid, dirty line needs a writeback
+    if (victim->valid && victim->dirty)
+        c->stat_dirty_evicts++;
+
+    // fill the way with the new line
+    victim->valid = true;
+    victim->dirty = is_write;
+    victim->tag = tag;
+    victim->core_id = core_id;
+    victim->last_access_time = current_cycle;
 }
 
 /**
@@ -128,9 +181,27 @@ void cache_install(Cache *c, uint64_t line_addr, bool is_write,
 unsigned int cache_find_victim(Cache *c, unsigned int set_index,
                                unsigned int core_id)
 {
-    // TODO(lab4-A): invalid way first, then LRU / RANDOM.
-    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS).
-    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets.
+    // an empty way is always the best victim
+    for (unsigned int way = 0; way < c->num_ways; way++)
+    {
+        if (!c->sets[set_index].lines[way].valid)
+            return way;
+    }
+
+    if (c->replacement_policy == RANDOM)
+        return rand() % c->num_ways;
+
+    // LRU: the way touched longest ago loses
+    unsigned int victim = 0;
+    for (unsigned int way = 1; way < c->num_ways; way++)
+    {
+        if (c->sets[set_index].lines[way].last_access_time < c->sets[set_index].lines[victim].last_access_time)
+            victim = way;
+    }
+    return victim;
+
+    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS)
+    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets
     // TODO: Find a victim way in the given cache set according to the cache's
     //       replacement policy.
     // TODO: In part A, implement the LRU and random replacement policies.
