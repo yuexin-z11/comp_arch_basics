@@ -92,10 +92,37 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
 CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
                          unsigned int core_id)
 {
-    // TODO(lab4-A): tag/index split, LRU timestamp update, read/write stats.
-    // TODO: Return HIT if the access hits in the cache, and MISS otherwise.
-    // TODO: If is_write is true, mark the resident line as dirty.
-    // TODO: Update the appropriate cache statistics.
+    // low bits of line_addr pick the set, the rest is the tag
+    uint64_t set_index = line_addr % c->num_sets;
+    uint64_t tag = line_addr / c->num_sets;
+    CacheSet *set = &c->sets[set_index];
+
+    if (is_write)
+        c->stat_write_access++;
+    else
+        c->stat_read_access++;
+
+    for (unsigned int way = 0; way < c->num_ways; way++)
+    {
+        CacheLine *line = &set->lines[way];
+
+        // hit: valid line with a matching tag
+        if (line->valid && line->tag == tag)
+        {
+            // touch for LRU (timestamp = now)
+            line->last_access_time = current_cycle;
+            if (is_write)
+                line->dirty = true;
+            return HIT;
+        }
+    }
+
+    // miss: count it against the right stat
+    if (is_write)
+        c->stat_write_miss++;
+    else
+        c->stat_read_miss++;
+    return MISS;
 }
 
 /**
