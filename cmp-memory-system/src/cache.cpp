@@ -168,9 +168,27 @@ void cache_install(Cache *c, uint64_t line_addr, bool is_write,
 unsigned int cache_find_victim(Cache *c, unsigned int set_index,
                                unsigned int core_id)
 {
-    // TODO(lab4-A): invalid way first, then LRU / RANDOM.
-    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS).
-    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets.
+    // an empty way is always the best victim
+    for (unsigned int way = 0; way < c->num_ways; way++)
+    {
+        if (!c->sets[set_index].lines[way].valid)
+            return way;
+    }
+
+    if (c->replacement_policy == RANDOM)
+        return rand() % c->num_ways;
+
+    // LRU: the way touched longest ago loses
+    unsigned int victim = 0;
+    for (unsigned int way = 1; way < c->num_ways; way++)
+    {
+        if (c->sets[set_index].lines[way].last_access_time < c->sets[set_index].lines[victim].last_access_time)
+            victim = way;
+    }
+    return victim;
+
+    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS)
+    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets
     // TODO: Find a victim way in the given cache set according to the cache's
     //       replacement policy.
     // TODO: In part A, implement the LRU and random replacement policies.
