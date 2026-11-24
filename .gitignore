@@ -1,5 +1,12 @@
 **/src/sim
 *.o
 .DS_Store
+
+# Generated benchmark output (saved instruction-trace results remain tracked).
+pipeline-and-branch-prediction/results/*.res
+pipeline-and-branch-prediction/scripts/report.txt
+out-of-order-pipeline/results/*.res
+out-of-order-pipeline/scripts/report.txt
+cmp-memory-system/results/*.res
 cmp-memory-system/submission/
 cmp-memory-system/scripts/report.txt

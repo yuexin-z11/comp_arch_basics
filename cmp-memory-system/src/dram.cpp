@@ -77,9 +77,7 @@ extern DRAMPolicy DRAM_PAGE_POLICY;
  */
 DRAM *dram_new()
 {
-    // TODO(lab4-B): calloc DRAM (row buffers start invalid).
-    // TODO: Allocate memory to the data structures and initialize the required
-    //       fields. (You might want to use calloc() for this.)
+    return (DRAM *)calloc(1, sizeof(DRAM));
 }
 
 /**
@@ -101,11 +99,22 @@ DRAM *dram_new()
  */
 uint64_t dram_access(DRAM *dram, uint64_t line_addr, bool is_dram_write)
 {
-    // TODO(lab4-B): fixed DELAY_SIM_MODE_B in mode B; stats for read/write.
-    // TODO(lab4-C): delegate to dram_access_mode_CDEF() in modes C+.
-    // TODO: Update the appropriate DRAM statistics.
-    // TODO: Call the dram_access_mode_CDEF() function as needed.
-    // TODO: Return the delay in cycles incurred by this DRAM access.
+    uint64_t delay = SIM_MODE == SIM_MODE_B
+                         ? DELAY_SIM_MODE_B
+                         : dram_access_mode_CDEF(dram, line_addr, is_dram_write);
+
+    if (is_dram_write)
+    {
+        dram->stat_write_access++;
+        dram->stat_write_delay += delay;
+    }
+    else
+    {
+        dram->stat_read_access++;
+        dram->stat_read_delay += delay;
+    }
+
+    return delay;
 }
 
 /**

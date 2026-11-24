@@ -244,6 +244,32 @@ uint64_t memsys_access_modeA(MemorySystem *sys, uint64_t line_addr,
     return 0;
 }
 
+// one L1 access (I or D): hit latency, plus L2 on a miss
+static uint64_t memsys_l1_access(MemorySystem *sys, Cache *l1, uint64_t hit_latency,
+                                 uint64_t line_addr, bool is_write, unsigned int core_id)
+{
+    uint64_t delay = hit_latency;
+
+    if (cache_access(l1, line_addr, is_write, core_id) == MISS)
+    {
+        // fetch the line from L2 (a read, even on a store miss)
+        delay += memsys_l2_access(sys, line_addr, false, core_id);
+        cache_install(l1, line_addr, is_write, core_id);
+
+        // dirty L1 victim -> L2 writeback (delay not counted)
+        CacheLine *evicted = &l1->last_evicted_line;
+        if (evicted->valid && evicted->dirty)
+        {
+            // victim was in the same set as line_addr
+            uint64_t set_index = line_addr % l1->num_sets;
+            uint64_t evicted_addr = evicted->tag * l1->num_sets + set_index;
+            memsys_l2_access(sys, evicted_addr, true, core_id);
+        }
+    }
+
+    return delay;
+}
+
 /**
  * In mode B or C, access the given memory address from an instruction fetch or
  * load/store.
@@ -268,19 +294,17 @@ uint64_t memsys_access_modeBC(MemorySystem *sys, uint64_t line_addr,
 
     if (type == ACCESS_TYPE_IFETCH)
     {
-        // TODO(lab4-B): L1 access -> on miss L2 access + install; L1 dirty
-        //               victim -> L2 writeback (off critical path).
-        // TODO: Simulate the instruction fetch and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->icache, ICACHE_HIT_LATENCY, line_addr, false, core_id);
     }
 
     if (type == ACCESS_TYPE_LOAD)
     {
-        // TODO: Simulate the data load and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->dcache, DCACHE_HIT_LATENCY, line_addr, false, core_id);
     }
 
     if (type == ACCESS_TYPE_STORE)
     {
-        // TODO: Simulate the data store and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->dcache, DCACHE_HIT_LATENCY, line_addr, true, core_id);
     }
 
     return delay;
@@ -307,14 +331,25 @@ uint64_t memsys_l2_access(MemorySystem *sys, uint64_t line_addr,
 {
     uint64_t delay = L2CACHE_HIT_LATENCY;
 
-    // TODO(lab4-B): L2 hit/miss, DRAM read on miss, DRAM writeback of
-    //               dirty L2 victim (delay not counted).
-    // TODO: Perform the L2 cache access.
+    // a writeback from L1 is a write to L2
+    CacheResult outcome = cache_access(sys->l2cache, line_addr, is_writeback, core_id);
 
-    // TODO: Use the dram_access() function to get the delay of an L2 miss.
-    // TODO: Use the dram_access() function to perform writebacks to memory.
-    //       Note that writebacks are done off the critical path.
-    // This will help us track your memory reads and memory writes.
+    if (outcome == MISS)
+    {
+        // fetch the line from DRAM (even on a writeback miss)
+        delay += dram_access(sys->dram, line_addr, false);
+        cache_install(sys->l2cache, line_addr, is_writeback, core_id);
+
+        // dirty L2 victim -> DRAM writeback (off the critical path)
+        CacheLine *evicted = &sys->l2cache->last_evicted_line;
+        if (evicted->valid && evicted->dirty)
+        {
+            // victim was in the same set as line_addr
+            uint64_t set_index = line_addr % sys->l2cache->num_sets;
+            uint64_t evicted_addr = evicted->tag * sys->l2cache->num_sets + set_index;
+            dram_access(sys->dram, evicted_addr, true);
+        }
+    }
 
     return delay;
 }
@@ -346,7 +381,7 @@ uint64_t memsys_access_modeDEF(MemorySystem *sys, uint64_t v_line_addr,
     uint64_t delay = 0;
     uint64_t p_line_addr = 0;
 
-    // TODO(lab4-D): VPN->PFN translation, per-core L1s, shared L2.
+    // TODO(lab4-D): VPN->PFN translation, per-core L1s, shared L2
     // TODO: First convert lineaddr from virtual (v) to physical (p) using the
     //       function memsys_convert_vpn_to_pfn(). Page size is defined to be
     //       4 KB, as indicated by the PAGE_SIZE constant.
