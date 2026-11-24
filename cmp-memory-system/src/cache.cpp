@@ -141,12 +141,25 @@ CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
 void cache_install(Cache *c, uint64_t line_addr, bool is_write,
                    unsigned int core_id)
 {
-    // TODO(lab4-A): save victim to last_evicted_line, count dirty evicts.
-    // TODO: Use cache_find_victim() to determine the victim line to evict.
-    // TODO: Copy it into a last_evicted_line field in the cache in order to
-    //       track writebacks.
-    // TODO: Initialize the victim entry with the line to install.
-    // TODO: Update the appropriate cache statistics.
+    uint64_t set_index = line_addr % c->num_sets;
+    uint64_t tag = line_addr / c->num_sets;
+
+    unsigned int way = cache_find_victim(c, set_index, core_id);
+    CacheLine *victim = &c->sets[set_index].lines[way];
+
+    // keep a copy of the old line so the caller can write it back
+    c->last_evicted_line = *victim;
+
+    // only a valid, dirty line needs a writeback
+    if (victim->valid && victim->dirty)
+        c->stat_dirty_evicts++;
+
+    // fill the way with the new line
+    victim->valid = true;
+    victim->dirty = is_write;
+    victim->tag = tag;
+    victim->core_id = core_id;
+    victim->last_access_time = current_cycle;
 }
 
 /**
