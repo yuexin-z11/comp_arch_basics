@@ -55,11 +55,11 @@ echo "Running Part E"
 
 ########## ---------------  F ---------------- ################
 
-# echo "Running Part F"
+echo "Running Part F"
 
-# ../src/sim -mode 4 -L2repl 3 ../traces/bzip2.mtr.gz ../traces/libq.mtr.gz  > ../results/F.mix1.res
-# ../src/sim -mode 4 -L2repl 3 ../traces/bzip2.mtr.gz ../traces/lbm.mtr.gz  > ../results/F.mix2.res
-# ../src/sim -mode 4 -L2repl 3 ../traces/lbm.mtr.gz ../traces/libq.mtr.gz  > ../results/F.mix3.res
+../src/sim -mode 4 -L2repl 3 ../traces/bzip2.mtr.gz ../traces/libq.mtr.gz  > ../results/F.mix1.res
+../src/sim -mode 4 -L2repl 3 ../traces/bzip2.mtr.gz ../traces/lbm.mtr.gz  > ../results/F.mix2.res
+../src/sim -mode 4 -L2repl 3 ../traces/lbm.mtr.gz ../traces/libq.mtr.gz  > ../results/F.mix3.res
 
 ########## ---------------  GenReport ---------------- ################
 
