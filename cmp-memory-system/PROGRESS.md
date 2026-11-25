@@ -2,18 +2,18 @@
 
 Deadlines: **A+B+C** by Wed Nov 25, 2026, 11:59 pm ET. **D (+E+F)** by Fri Dec 4, 2026, 11:59 pm ET.
 
-Workflow: one PR per part, branched from `main`. Merge with **"Create a merge commit"** so every commit is kept.
+Workflow: feature branches for A-D were merged with merge commits to preserve their commits. E is integrated directly on `main`.
 
 ## Parts
 
 | Part | Pts | Branch | Files | Ref tests | Status |
 | --- | --- | --- | --- | --- | --- |
-| Skeleton | – | `lab4/skeleton` | structs, tooling, docs | – | In review |
-| A: cache | 3 | `lab4/part-a` | `cache.cpp` | `A.libq` | Todo |
-| B: multi-level | 2 | `lab4/part-b` | `memsys.cpp`, `dram.cpp` (fixed 100) | `B.S1MB.libq` | Todo |
-| C: DRAM row buffer | 3 | `lab4/part-c` | `dram.cpp` | `C.S1MB.{OP,CP}.libq` | Todo |
-| D: two cores | 2 | `lab4/part-d` | `memsys.cpp` | `D.mix1` | Todo |
-| E: SWP (EC) | +2 | `lab4/part-e` | `cache.cpp` | `E.Q{1,2,3}.mix1` | Todo |
+| Skeleton | – | `lab4/skeleton` | structs, tooling, docs | – | Merged |
+| A: cache | 3 | `feature/set-associative-cache` | `cache.cpp` | `A.libq` | Verified |
+| B: multi-level | 2 | `feature/multi-level-cache` | `memsys.cpp`, `dram.cpp` (fixed 100) | `B.S1MB.libq` | Verified |
+| C: DRAM row buffer | 3 | `feature/dram-row-buffer` | `dram.cpp` | `C.S1MB.{OP,CP}.libq` | Verified |
+| D: two cores | 2 | `feature/two-core-memory-system` | `memsys.cpp` | `D.mix1` | Verified |
+| E: SWP (EC) | +2 | `main` | `cache.cpp` | `E.Q{1,2,3}.mix1` | Verified |
 | F: DWP (EC) | +3 | `lab4/part-f` | `cache.{h,cpp}`, `DWP_report.txt` | none (beat D/E miss % by >1% on one mix) | Todo |
 
 ## What was added on top of the supplied framework
@@ -50,12 +50,12 @@ The original course comments are plain `// TODO:`. Every TODO added here is tagg
 | `src/memsys.cpp` | `memsys_access_modeDEF` | D | VPN→PFN, per-core L1s |
 | `DWP_report.txt` | top | F | write report |
 
-Remove each tag once its part's PR is merged.
+Remove each tag once its part is implemented and verified.
 
 ## Notes and gotchas
 - **Mix naming:** the handout text says Mix1 = libq+bzip2, Mix2 = libq+lbm, Mix3 = bzip2+lbm. `runall.sh` (whose output names get graded) uses mix1 = bzip2+libq, mix2 = bzip2+lbm, mix3 = lbm+libq. We follow `runall.sh`.
 - **Handout typo:** the Phase 2 steps say `src_ABC.tar.gz` / `results_ABC.tar.gz`, but the heading says `src_DEF` / `results_DEF`. `package.sh` uses the `_DEF` names.
-- Parts E and F lines in `runall.sh` are commented out; uncomment them in those PRs.
+- Part F lines in `runall.sh` remain commented out until that policy is implemented.
 - `dram.cpp` has its own `NUM_BANKS 16`; keep it consistent with `DRAM_NUM_BANKS` in `dram.h` (add a `static_assert` in Part C).
 - L2 is 1 MB, 16-way by default, so SWP 50% = `-SWP_core0ways 8`.
 - Random replacement may differ slightly from the reference (FAQ 3); only LRU is checked by `runtests.sh`.

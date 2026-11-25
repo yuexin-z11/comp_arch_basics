@@ -57,7 +57,6 @@ extern unsigned int SWP_CORE0_WAYS;
 Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
                  ReplacementPolicy replacement_policy)
 {
-    // TODO(lab4-A): calloc Cache + num_sets CacheSets; derive num_sets
     // TODO: Allocate memory to the data structures and initialize the required
     //       fields. (You might want to use calloc() for this.)
      // one zeroed Cache struct, so all stats start at 0
@@ -191,6 +190,39 @@ unsigned int cache_find_victim(Cache *c, unsigned int set_index,
     if (c->replacement_policy == RANDOM)
         return rand() % c->num_ways;
 
+    if (c->replacement_policy == SWP)
+    {
+        CacheSet *set = &c->sets[set_index];
+
+        // core 0 gets SWP_CORE0_WAYS ways, core 1 gets the rest
+        unsigned int quota = (core_id == 0) ? SWP_CORE0_WAYS : (c->num_ways - SWP_CORE0_WAYS);
+
+        // how many ways this core already holds in the set
+        unsigned int owned = 0;
+        for (unsigned int way = 0; way < c->num_ways; way++)
+        {
+            if (set->lines[way].core_id == core_id)
+                owned++;
+        }
+
+        // under quota -> evict from the other core, else replace our own
+        unsigned int victim_core = (owned < quota) ? (1 - core_id) : core_id;
+
+        // LRU among the victim core's ways
+        int victim = -1;
+        for (unsigned int way = 0; way < c->num_ways; way++)
+        {
+            CacheLine *line = &set->lines[way];
+            if (line->core_id != victim_core)
+                continue;
+            if (victim < 0 || line->last_access_time < set->lines[victim].last_access_time)
+                victim = way;
+        }
+        if (victim >= 0)
+            return victim;
+        // no line of that core in the set: fall back to plain LRU below
+    }
+
     // LRU: the way touched longest ago loses
     unsigned int victim = 0;
     for (unsigned int way = 1; way < c->num_ways; way++)
@@ -200,7 +232,6 @@ unsigned int cache_find_victim(Cache *c, unsigned int set_index,
     }
     return victim;
 
-    // TODO(lab4-E): SWP - victimize within core quota (SWP_CORE0_WAYS)
     // TODO(lab4-F): DWP - victimize by dynamic per-core way targets
     // TODO: Find a victim way in the given cache set according to the cache's
     //       replacement policy.
