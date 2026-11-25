@@ -25,6 +25,13 @@
  */
 #define MAX_WAYS_PER_CACHE_SET 16
 
+// DWP: monitor 1 of every DWP_SAMPLE_RATIO sets
+#define DWP_SAMPLE_RATIO 32
+// DWP: room for up to 64 sampled sets (2048-set cache)
+#define DWP_SAMPLED_SETS 64
+// DWP: repartition after this many L2 accesses
+#define DWP_INTERVAL 100000
+
 ///////////////////////////////////////////////////////////////////////////////
 //                              DATA STRUCTURES                              //
 ///////////////////////////////////////////////////////////////////////////////
@@ -51,17 +58,21 @@ typedef enum ReplacementPolicyEnum
     DWP = 3,
 } ReplacementPolicy;
 
-/** A single cache line (way). No data is stored; only metadata. */
+// one cache way: metadata only, no data stored
 typedef struct CacheLine
 {
-    bool valid;              // The line holds a resident block.
-    bool dirty;              // The line was written since install (writeback on evict).
-    uint64_t tag;            // Line address bits above the set index.
-    unsigned int core_id;    // Owning core (parts D, E, F).
-    uint64_t last_access_time; // current_cycle of last touch (LRU timestamp).
+    bool valid;
+    // written since install, so evict -> writeback
+    bool dirty;
+    // line address bits above the set index
+    uint64_t tag;
+    // owning core (parts D, E, F)
+    unsigned int core_id;
+    // current_cycle of last touch (LRU timestamp)
+    uint64_t last_access_time;
 } CacheLine;
 
-/** A single cache set: up to MAX_WAYS_PER_CACHE_SET ways. */
+// one cache set (up to MAX_WAYS_PER_CACHE_SET ways)
 typedef struct CacheSet
 {
     CacheLine lines[MAX_WAYS_PER_CACHE_SET];
@@ -73,19 +84,26 @@ typedef struct Cache
     // TODO: Define any other fields you need here.
     // Refer to Appendix A for details on other fields you will need here.
 
-    CacheSet *sets;                       // Array of num_sets sets.
-    uint64_t num_sets;                    // size / (line_size * num_ways).
-    uint64_t num_ways;                    // Associativity (<= 16).
-    ReplacementPolicy replacement_policy; // LRU / RANDOM / SWP / DWP.
+    // array of num_sets sets
+    CacheSet *sets;
+    // size / (line_size * num_ways)
+    uint64_t num_sets;
+    // associativity (<= 16)
+    uint64_t num_ways;
+    ReplacementPolicy replacement_policy;
 
-    /**
-     * Copy of the most recently evicted line, so the caller can schedule a
-     * writeback to the next level when it is valid and dirty (part B).
-     */
+    // last victim, so the caller can write it back if dirty (part B)
     CacheLine last_evicted_line;
 
-    // TODO(lab4-F): Add dynamic partitioning state here (e.g., UCP utility
-    //               monitors / per-core target way allocation).
+    // DWP (UCP): ways currently given to core 0, core 1 gets the rest
+    unsigned int dwp_core0_ways;
+    // DWP: L2 accesses since the last repartition
+    uint64_t dwp_accesses;
+    // DWP: per-core shadow tags for sampled sets, index 0 = MRU
+    uint64_t umon_tags[2][DWP_SAMPLED_SETS][MAX_WAYS_PER_CACHE_SET];
+    bool umon_valid[2][DWP_SAMPLED_SETS][MAX_WAYS_PER_CACHE_SET];
+    // DWP: hits seen at each LRU stack position, per core
+    uint64_t umon_hits[2][MAX_WAYS_PER_CACHE_SET];
 
     /**
      * The total number of times this cache was accessed for a read.

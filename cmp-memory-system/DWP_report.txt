@@ -1,22 +1,94 @@
 Dynamic Way Partitioning (Part F) Report
 ========================================
 
-TODO(lab4-F): fill in after implementing -L2repl 3.
+1. Technique: Utility-Based Cache Partitioning (UCP)
 
-1. Technique
-   - Scheme implemented and how it decides per-core way allocation.
+   The shared 16-way L2 is split between the two cores, as in SWP, but the
+   split is learned while the programs run instead of being fixed.
+
+   Utility monitors (UMON). Each core has its own shadow tag directory that
+   tracks what that core's accesses would do if it had the whole L2 to
+   itself. To keep it cheap, only 1 in 32 L2 sets is monitored (32 of the
+   1024 sets). Each sampled set keeps 16 shadow tags per core in LRU stack
+   order. When a core's access hits a shadow tag at stack position i, the
+   core would have hit with i + 1 or more ways, so counter hits[core][i] is
+   incremented and the tag moves to the MRU position. A miss inserts the
+   tag at MRU and drops the LRU entry.
+
+   Repartitioning. Every 100,000 L2 accesses, the controller tries every
+   split w = 1..15 (core 0 gets w ways, core 1 gets 16 - w) and computes the
+   total hits sum(hits[0][0..w-1]) + sum(hits[1][0..15-w]). It picks the
+   split with the most hits, so each way goes to the core that would gain
+   the most hits from it. With only two cores, checking all 15 splits is
+   cheap, so the greedy lookahead step from the paper isn't needed. Every
+   counter is then halved, so recent behavior counts more than old behavior
+   and the split can follow program phases.
+
+   Enforcement. The learned split is enforced by the same victim selection
+   used for SWP (Part E). On an L2 miss, if the requesting core holds fewer
+   ways in the set than its current share, it evicts the LRU line of the
+   other core. Otherwise it replaces its own LRU line. Invalid ways are
+   always used first. The split starts at 8/8 and is selected with
+   -mode 4 -L2repl 3. Cache size, associativity, set count and line size
+   are unchanged.
+
+   Implementation: cache.h (DWP_* constants, UMON state in struct Cache) and
+   cache.cpp (umon_update, dwp_repartition, dwp_monitor, the hook at the top
+   of cache_access, and the shared SWP/DWP branch in cache_find_victim).
 
 2. References
-   - e.g., M. K. Qureshi and Y. N. Patt, "Utility-Based Cache Partitioning:
-     A Low-Overhead, High-Performance, Runtime Mechanism to Partition Shared
-     Caches," MICRO 2006.
+
+   M. K. Qureshi and Y. N. Patt, "Utility-Based Cache Partitioning: A
+   Low-Overhead, High-Performance, Runtime Mechanism to Partition Shared
+   Caches," Proc. 39th IEEE/ACM International Symposium on
+   Microarchitecture (MICRO), 2006.
 
 3. Why it should outperform LRU (Part D) and SWP (Part E)
 
-4. Results: L2 miss percentage
+   LRU gives L2 space to whichever core misses most often, not to the core
+   that can actually reuse it. A streaming program (libq, lbm) fills the L2
+   with lines it never touches again, pushing out lines a reuse-friendly
+   program (bzip2) would have hit on.
 
-   Mix   | Workloads   | D (LRU) | E (SWP 8/8) | F (DWP)
-   ------+-------------+---------+-------------+--------
-   mix1  | bzip2+libq  |         |             |
-   mix2  | bzip2+lbm   |         |             |
-   mix3  | lbm+libq    |         |             |
+   SWP prevents that, but with one fixed split. The best split depends on
+   the workload pair: the quota sweep below shows mix1 is best near 15/1,
+   while mix2 is best near 12/4. SWP at 8/8 is right for neither.
+
+   UCP measures how many extra hits each additional way would give each
+   core, and moves ways to the core with the higher benefit. Tracking the
+   learned split at each repartition shows:
+   - mix1: it starts at 8/8, moves through 9 and 12, and settles at 15/1
+     (bzip2/libq) by the 4th interval. That is the same as the best static
+     split, because libq gains almost no hits from extra ways.
+   - mix2: it settles mostly at 12/4, again the best static split, but
+     moves toward lbm in some phases, so it ends slightly above the best
+     static split (52.484 vs. 52.339).
+   UCP finds a good split without knowing it in advance, and it adapts when
+   program phases change.
+
+4. Results: L2 read miss percentage (L2CACHE_READ_MISS_PERC)
+
+   Mix   | Workloads (core0+core1) | D (LRU) | E (SWP 8/8) | F (UCP)
+   ------+-------------------------+---------+-------------+--------
+   mix1  | bzip2 + libq            |  71.641 |      70.846 |  67.383
+   mix2  | bzip2 + lbm             |  55.476 |      53.434 |  52.484
+   mix3  | lbm + libq              |  70.265 |      70.265 |  70.266
+
+   mix1: UCP lowers the L2 miss rate by 4.26 points vs. LRU and by 3.46
+   points vs. SWP 8/8, which is more than the 1% target.
+
+   mix2: UCP beats LRU by 2.99 points and SWP 8/8 by 0.95 points, close to
+   the best static split (12/4: 52.339).
+
+   mix3: both programs stream through memory with almost no reuse, so no
+   split helps. Every scheme stays at about 70.27%.
+
+   For reference, static SWP quota sweep (core 0 ways -> L2 miss %):
+
+   quota |  mix1  |  mix2  |  mix3
+   ------+--------+--------+-------
+       4 | 75.544 | 55.783 | 70.266
+       8 | 70.846 | 53.434 | 70.265
+      12 | 68.654 | 52.339 | 70.265
+      14 | 67.704 | 58.574 | 70.265
+      15 | 67.288 | 73.711 | 70.265
