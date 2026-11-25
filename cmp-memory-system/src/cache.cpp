@@ -68,10 +68,84 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
     // sets = total bytes / (bytes per line * lines per set)
     c->num_sets = size / (line_size * associativity);
 
+    // DWP: start from an even split
+    c->dwp_core0_ways = associativity / 2;
+
     // zeroed sets, so every line starts invalid
     c->sets = (CacheSet *)calloc(c->num_sets, sizeof(CacheSet));
 
     return c;
+}
+
+// DWP: update one core's shadow tags (LRU stack) and hit counters
+static void umon_update(Cache *c, unsigned int core, unsigned int sample, uint64_t line_addr)
+{
+    uint64_t *tags = c->umon_tags[core][sample];
+    bool *valid = c->umon_valid[core][sample];
+
+    // find the line in the stack (pos = its recency rank)
+    unsigned int pos = c->num_ways - 1;
+    for (unsigned int i = 0; i < c->num_ways; i++)
+    {
+        if (valid[i] && tags[i] == line_addr)
+        {
+            // a hit at rank i: this core would hit with i + 1 ways
+            c->umon_hits[core][i]++;
+            pos = i;
+            break;
+        }
+    }
+
+    // move to MRU: shift the more recent entries down one slot
+    for (unsigned int i = pos; i > 0; i--)
+    {
+        tags[i] = tags[i - 1];
+        valid[i] = valid[i - 1];
+    }
+    tags[0] = line_addr;
+    valid[0] = true;
+}
+
+// DWP: pick the split that maximizes total hits, then age the counters
+static void dwp_repartition(Cache *c)
+{
+    unsigned int best_ways = c->dwp_core0_ways;
+    uint64_t best_hits = 0;
+
+    // each core keeps at least 1 way
+    for (unsigned int w = 1; w < c->num_ways; w++)
+    {
+        uint64_t hits = 0;
+        for (unsigned int i = 0; i < w; i++)
+            hits += c->umon_hits[0][i];
+        for (unsigned int i = 0; i < c->num_ways - w; i++)
+            hits += c->umon_hits[1][i];
+        if (hits > best_hits)
+        {
+            best_hits = hits;
+            best_ways = w;
+        }
+    }
+    c->dwp_core0_ways = best_ways;
+
+    // halve counters so older behavior fades
+    for (unsigned int core = 0; core < 2; core++)
+        for (unsigned int i = 0; i < c->num_ways; i++)
+            c->umon_hits[core][i] /= 2;
+}
+
+// DWP: watch every L2 access, repartition every DWP_INTERVAL accesses
+static void dwp_monitor(Cache *c, uint64_t line_addr, unsigned int core_id)
+{
+    uint64_t set_index = line_addr % c->num_sets;
+    if (set_index % DWP_SAMPLE_RATIO == 0)
+        umon_update(c, core_id, set_index / DWP_SAMPLE_RATIO, line_addr);
+
+    if (++c->dwp_accesses >= DWP_INTERVAL)
+    {
+        dwp_repartition(c);
+        c->dwp_accesses = 0;
+    }
 }
 
 /**
@@ -91,6 +165,9 @@ Cache *cache_new(uint64_t size, uint64_t associativity, uint64_t line_size,
 CacheResult cache_access(Cache *c, uint64_t line_addr, bool is_write,
                          unsigned int core_id)
 {
+    if (c->replacement_policy == DWP)
+        dwp_monitor(c, line_addr, core_id);
+
     // low bits of line_addr pick the set, the rest is the tag
     uint64_t set_index = line_addr % c->num_sets;
     uint64_t tag = line_addr / c->num_sets;
@@ -190,12 +267,14 @@ unsigned int cache_find_victim(Cache *c, unsigned int set_index,
     if (c->replacement_policy == RANDOM)
         return rand() % c->num_ways;
 
-    if (c->replacement_policy == SWP)
+    if (c->replacement_policy == SWP || c->replacement_policy == DWP)
     {
         CacheSet *set = &c->sets[set_index];
 
-        // core 0 gets SWP_CORE0_WAYS ways, core 1 gets the rest
-        unsigned int quota = (core_id == 0) ? SWP_CORE0_WAYS : (c->num_ways - SWP_CORE0_WAYS);
+        // SWP: fixed core 0 share, DWP: share learned by the monitors
+        unsigned int core0_ways = (c->replacement_policy == SWP) ? SWP_CORE0_WAYS
+                                                                 : c->dwp_core0_ways;
+        unsigned int quota = (core_id == 0) ? core0_ways : (c->num_ways - core0_ways);
 
         // how many ways this core already holds in the set
         unsigned int owned = 0;
@@ -232,7 +311,6 @@ unsigned int cache_find_victim(Cache *c, unsigned int set_index,
     }
     return victim;
 
-    // TODO(lab4-F): DWP - victimize by dynamic per-core way targets
     // TODO: Find a victim way in the given cache set according to the cache's
     //       replacement policy.
     // TODO: In part A, implement the LRU and random replacement policies.
