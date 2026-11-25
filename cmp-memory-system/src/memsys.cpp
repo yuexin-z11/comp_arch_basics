@@ -379,29 +379,33 @@ uint64_t memsys_access_modeDEF(MemorySystem *sys, uint64_t v_line_addr,
                                AccessType type, unsigned int core_id)
 {
     uint64_t delay = 0;
-    uint64_t p_line_addr = 0;
 
-    // TODO(lab4-D): VPN->PFN translation, per-core L1s, shared L2
-    // TODO: First convert lineaddr from virtual (v) to physical (p) using the
-    //       function memsys_convert_vpn_to_pfn(). Page size is defined to be
-    //       4 KB, as indicated by the PAGE_SIZE constant.
-    // Note: memsys_convert_vpn_to_pfn() operates at page granularity and
-    //       returns a page number.
-    p_line_addr = v_line_addr; // Replace this with a correct implementation.
+    // lines per page (4096 B page / 64 B line = 64)
+    uint64_t lines_per_page = PAGE_SIZE / CACHE_LINESIZE;
 
+    // split into page number + line offset, translate the page
+    uint64_t vpn = v_line_addr / lines_per_page;
+    uint64_t offset = v_line_addr % lines_per_page;
+    uint64_t pfn = memsys_convert_vpn_to_pfn(sys, vpn, core_id);
+    uint64_t p_line_addr = pfn * lines_per_page + offset;
+
+    // per-core L1s, shared L2 (same path as part B)
     if (type == ACCESS_TYPE_IFETCH)
     {
-        // TODO: Simulate the instruction fetch and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->icache_coreid[core_id], ICACHE_HIT_LATENCY,
+                                 p_line_addr, false, core_id);
     }
 
     if (type == ACCESS_TYPE_LOAD)
     {
-        // TODO: Simulate the data load and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->dcache_coreid[core_id], DCACHE_HIT_LATENCY,
+                                 p_line_addr, false, core_id);
     }
 
     if (type == ACCESS_TYPE_STORE)
     {
-        // TODO: Simulate the data store and update delay accordingly.
+        delay = memsys_l1_access(sys, sys->dcache_coreid[core_id], DCACHE_HIT_LATENCY,
+                                 p_line_addr, true, core_id);
     }
 
     return delay;
